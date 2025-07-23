@@ -119,7 +119,7 @@
 
     const channels = [...document.getElementById('channelsTable').children].map(row => {
       const [id, sound, server] = [...row.querySelectorAll('input')].map(input => input.value);
-      const obj = { id: parseInt(id) };
+      const obj = { id: id };
       if (sound) obj.sound = sound;
       if (server) obj.server = server;
       return obj;
@@ -127,7 +127,7 @@
 
     const member_actions = [...document.getElementById('membersTable').children].map(row => {
       const [id, sound, delay, note] = [...row.querySelectorAll('input')].map(input => input.value);
-      return { id: parseInt(id), sound, delay: parseFloat(delay), note };
+      return { id: id, sound, delay: parseFloat(delay), note };
     });
 
     const data = { default_sound: defaultSound, channels, member_actions };

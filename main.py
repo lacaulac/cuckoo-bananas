@@ -43,6 +43,14 @@ def load_config():
         with open(CONFIG_FILE_NAME, 'r') as f:
             config = json.load(f)
             channel_configs = config["channels"]
+            # Convert to integer IDs if they are strings
+            for channel in channel_configs:
+                if "id" in channel:
+                    channel["id"] = int(channel["id"])
+            # Same for member actions
+            for member_action in config.get("member_actions", []):
+                if "id" in member_action:
+                    member_action["id"] = int(member_action["id"])
             SOUND_FILE = config["default_sound"] if "default_sound" in config else SOUND_FILE
             print(f"Loaded configuration: {channel_configs}")
     except FileNotFoundError:
