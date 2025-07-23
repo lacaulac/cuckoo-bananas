@@ -3,6 +3,16 @@ from discord.ext import commands
 import asyncio
 import datetime
 import json
+from fastapi import FastAPI, Request, UploadFile, File, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
+import shutil
+import json
+import uvicorn
+
+app = FastAPI()
 
 # Your sound and voice channels
 SOUND_FILE = "ank.wav"
@@ -12,6 +22,8 @@ VOICE_CHANNEL_IDS = [
 ]
 CONFIG_FILE_NAME = "config.json"
 SHARED_DIRECTORY = "shared"
+SHARED_DIR = Path("./" + SHARED_DIRECTORY)
+ALLOWED_EXTENSIONS = {".wav", ".mp3", ".ogg", ".aac"}
 
 config = None
 channel_configs = []
@@ -25,14 +37,15 @@ if os.path.exists(SHARED_DIRECTORY):
         CONFIG_FILE_NAME = os.path.join(SHARED_DIRECTORY, CONFIG_FILE_NAME)
 
 # Load configuration from config.json
-try:
-    with open(CONFIG_FILE_NAME, 'r') as f:
-        config = json.load(f)
-        channel_configs = config["channels"]
-        SOUND_FILE = config["default_sound"] if "default_sound" in config else SOUND_FILE
-        print(f"Loaded configuration: {channel_configs}")
-except FileNotFoundError:
-    print("config.json not found, using default settings.")
+def load_config():
+    try:
+        with open(CONFIG_FILE_NAME, 'r') as f:
+            config = json.load(f)
+            channel_configs = config["channels"]
+            SOUND_FILE = config["default_sound"] if "default_sound" in config else SOUND_FILE
+            print(f"Loaded configuration: {channel_configs}")
+    except FileNotFoundError:
+        print("config.json not found, using default settings.")
 
 intents = discord.Intents.default()
 intents.voice_states = True
@@ -43,9 +56,37 @@ bot = commands.Bot(command_prefix='%', intents=intents)
 async def on_ready():
     print(f'Logged in as {bot.user.name}')
     bot.loop.create_task(hourly_sound_loop())
+    bot.loop.create_task(start_web_server())
     # print("Syncing commands...")
     # await bot.tree.sync(guild=discord.Object(id=577482669915373578))  # Sync commands to a specific guild
     # print("Commands synced successfully!")
+    
+@bot.event
+async def on_voice_state_update(member, before, after):
+    if member.bot:
+        return
+    # print(f"Voice state update for {member.name}: {before} -> {after}")
+    # print(f"\tChannel: {before.channel} -> {after.channel}")
+    if before.channel != after.channel and after.channel is not None:
+        # A user has joined a voice channel
+        for member_action in config["member_actions"]:
+            if member.id == member_action["id"]:
+                sound_file = member_action["sound"]
+                delay = member_action["delay"] if "delay" in member_action else 0.0
+                async def that_function(channel_id, sound_file, delay):
+                    print(f"Playing sound for {member.name} in {after.channel.name} after {delay} seconds.")
+                    await asyncio.sleep(delay)
+                    try:
+                        await play_if_channel_has_people(channel_id, sound_file)
+                    except Exception as e:
+                        print(f"[ERROR] Failed to play sound in channel {channel_id}: {e}")
+                bot.loop.create_task(that_function(after.channel.id, sound_file, delay))
+        # if member.id == 216809338537377792:
+        #     print(f"Special user {member.name} joined {after.channel.name}, playing sound.")
+        #     try:
+        #         await play_if_channel_has_people(after.channel.id, "shared/hello.wav")
+        #     except Exception as e:
+        #         print(f"[ERROR] Failed to play sound in channel {after.channel.id}: {e}")
 
 @bot.command(name="play_sound", description="Play a sound in the voice channel")
 async def play_sound(ctx, channel_id: int, file_path: str):
@@ -144,13 +185,84 @@ async def play_if_channel_has_people(channel_id, sound=SOUND_FILE):
         except Exception as e:
             print(f"[ERROR] Unexpected error in {channel.name}: {e}")
 
+@app.get("/config")
+async def get_config():
+    with open(CONFIG_FILE_NAME, "r", encoding="utf-8") as l_f:
+        l_config = json.load(l_f)
+    l_config.pop("token", None)  # Remove the token from the response
+    return l_config
 
+@app.post("/config")
+async def update_config(request: Request):
+    data = await request.json()
+    with open(CONFIG_FILE_NAME, "r", encoding="utf-8") as l_f:
+        existing = json.load(l_f)
+    data["token"] = existing.get("token", "")  # Preserve the token
+    with open(CONFIG_FILE_NAME, "w", encoding="utf-8") as l_f:
+        json.dump(data, l_f, indent=4)
+    load_config()
+    return {"status": "success"}
+
+@app.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="File type not allowed")
+    
+    save_path = SHARED_DIR / file.filename
+
+    # Avoid overwriting by adding a numeric suffix if needed
+    counter = 1
+    original_stem = save_path.stem
+    while save_path.exists():
+        save_path = SHARED_DIR / f"{original_stem}_{counter}{ext}"
+        counter += 1
+
+    with save_path.open("wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    return {"filename": save_path.name}
+
+
+@app.get("/files")
+async def list_files():
+    files = [f.name for f in SHARED_DIR.iterdir() if f.is_file() and f.suffix.lower() in ALLOWED_EXTENSIONS]
+    return JSONResponse(files)
+
+@app.delete("/files/{filename}")
+async def delete_file(filename: str):
+    # sanitize filename to avoid directory traversal
+    safe_name = Path(filename).name
+    file_path = SHARED_DIR / safe_name
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    try:
+        file_path.unlink()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete file: {e}")
+    return {"detail": "File deleted"}
+
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    with open("./static/index.html", "r", encoding="utf-8") as l_f:
+        return l_f.read()
+
+app.mount("/static", StaticFiles(directory="./static"), name="static")
+
+async def start_web_server():
+    config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="info")
+    server = uvicorn.Server(config)
+    await server.serve()
+    
 if __name__ == "__main__":
     if not config or "token" not in config:
         print("No valid configuration found. Please check your config.json file.")
         exit(1)
-    discord.opus.load_opus("/usr/lib/libopus.so")
-    if not discord.opus.is_loaded():
-        print('Opus failed to load')
-        exit(1)
+    # If not on Windows
+    if os.name != 'nt':
+        # Load Opus library
+        if not discord.opus.is_loaded():
+            discord.opus.load_opus("/usr/lib/libopus.so")
+        if not discord.opus.is_loaded():
+            print('Opus failed to load')
+            exit(1)
     bot.run(token=config["token"])

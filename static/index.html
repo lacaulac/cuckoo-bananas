@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Config Editor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center p-4">
+  <h1 class="text-3xl font-bold mb-6">🔧 Config Editor</h1>
+
+  <div class="w-full max-w-6xl space-y-8">
+    <div>
+      <label class="block text-sm font-medium text-gray-300 mb-1">Default Sound</label>
+      <input id="defaultSound" class="w-full p-2 mb-4 rounded bg-gray-800 border border-gray-700" type="text" />
+    </div>
+
+    <div>
+      <h2 class="text-xl font-semibold mb-2">🎵 Channels</h2>
+      <table class="w-full text-sm text-left text-gray-400">
+        <thead class="text-xs uppercase bg-gray-700 text-gray-300">
+          <tr>
+            <th class="px-4 py-2">ID</th>
+            <th class="px-4 py-2">Sound</th>
+            <th class="px-4 py-2">Server</th>
+            <th class="px-4 py-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="channelsTable" class="bg-gray-800"></tbody>
+      </table>
+      <button onclick="addChannelRow()" class="mt-2 px-3 py-1 bg-green-600 hover:bg-green-700 rounded">+ Add Channel</button>
+    </div>
+
+    <div>
+      <h2 class="text-xl font-semibold mb-2">👥 Member Actions</h2>
+      <table class="w-full text-sm text-left text-gray-400">
+        <thead class="text-xs uppercase bg-gray-700 text-gray-300">
+          <tr>
+            <th class="px-4 py-2">ID</th>
+            <th class="px-4 py-2">Sound</th>
+            <th class="px-4 py-2">Delay</th>
+            <th class="px-4 py-2">Notes</th>
+            <th class="px-4 py-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="membersTable" class="bg-gray-800"></tbody>
+      </table>
+      <button onclick="addMemberRow()" class="mt-2 px-3 py-1 bg-green-600 hover:bg-green-700 rounded">+ Add Member</button>
+    </div>
+
+    <div>
+      <h2 class="text-xl font-semibold mb-2">📁 Upload Sound Files</h2>
+      <form id="uploadForm" class="flex flex-col gap-2" enctype="multipart/form-data">
+        <input type="file" name="file" accept=".wav,.mp3,.ogg,.aac" class="bg-gray-800 p-2 rounded border border-gray-700" />
+        <button type="submit" class="w-fit bg-yellow-600 hover:bg-yellow-700 px-4 py-2 rounded">⬆️ Upload</button>
+      </form>
+      <ul id="fileList" class="mt-4 list-disc list-inside text-sm text-gray-300"></ul>
+    </div>
+
+    <button id="saveBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+      💾 Save Changes
+    </button>
+    <p id="status" class="mt-4 text-green-400 hidden">✅ Saved successfully!</p>
+  </div>
+
+  <script>
+  function createInputCell(value, type = 'text') {
+    const cell = document.createElement('td');
+    const input = document.createElement('input');
+    input.type = type;
+    input.value = value ?? '';
+    input.className = 'w-full px-2 py-1 bg-gray-700 text-white rounded';
+    cell.appendChild(input);
+    return cell;
+  }
+
+  function createDeleteButton(rowId) {
+    const cell = document.createElement('td');
+    const btn = document.createElement('button');
+    btn.innerText = '❌';
+    btn.className = 'text-red-500 hover:text-red-700';
+    btn.onclick = () => rowId.remove();
+    cell.appendChild(btn);
+    return cell;
+  }
+
+  function addChannelRow(data = {}) {
+    const row = document.createElement('tr');
+    row.appendChild(createInputCell(data.id));
+    row.appendChild(createInputCell(data.sound));
+    row.appendChild(createInputCell(data.server));
+    row.appendChild(createDeleteButton(row));
+    document.getElementById('channelsTable').appendChild(row);
+  }
+
+  function addMemberRow(data = {}) {
+    const row = document.createElement('tr');
+    row.appendChild(createInputCell(data.id));
+    row.appendChild(createInputCell(data.sound));
+    row.appendChild(createInputCell(data.delay, 'number'));
+    row.appendChild(createInputCell(data.note)); // ← new "note" field
+    row.appendChild(createDeleteButton(row));
+    document.getElementById('membersTable').appendChild(row);
+  }
+
+  async function loadConfig() {
+    const res = await fetch('/config');
+    const config = await res.json();
+    document.getElementById('defaultSound').value = config.default_sound || '';
+
+    (config.channels || []).forEach(addChannelRow);
+    (config.member_actions || []).forEach(addMemberRow);
+
+    await loadFileList();
+  }
+
+  async function saveConfig() {
+    const defaultSound = document.getElementById('defaultSound').value;
+
+    const channels = [...document.getElementById('channelsTable').children].map(row => {
+      const [id, sound, server] = [...row.querySelectorAll('input')].map(input => input.value);
+      const obj = { id: parseInt(id) };
+      if (sound) obj.sound = sound;
+      if (server) obj.server = server;
+      return obj;
+    });
+
+    const member_actions = [...document.getElementById('membersTable').children].map(row => {
+      const [id, sound, delay, note] = [...row.querySelectorAll('input')].map(input => input.value);
+      return { id: parseInt(id), sound, delay: parseFloat(delay), note };
+    });
+
+    const data = { default_sound: defaultSound, channels, member_actions };
+
+    const res = await fetch('/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (res.ok) {
+      document.getElementById('status').classList.remove('hidden');
+      setTimeout(() => document.getElementById('status').classList.add('hidden'), 2000);
+    }
+  }
+
+  async function deleteFile(filename) {
+    const confirmed = confirm(`Delete file "${filename}"?`);
+    if (!confirmed) return;
+
+    const res = await fetch(`/files/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+    if (res.ok) loadFileList();
+    else alert('❌ Failed to delete file!');
+  }
+
+  async function loadFileList() {
+    const res = await fetch('/files');
+    const files = await res.json();
+    const list = document.getElementById('fileList');
+    list.innerHTML = '';
+    files.forEach(file => {
+      const li = document.createElement('li');
+      li.className = 'flex items-center justify-between';
+      li.innerHTML = `
+        <span>${file}</span>
+        <button onclick="deleteFile('${file}')" class="ml-4 text-red-500 hover:text-red-700 text-sm">❌</button>
+      `;
+      list.appendChild(li);
+    });
+  }
+
+  document.getElementById('saveBtn').addEventListener('click', saveConfig);
+
+  document.getElementById('uploadForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const form = e.target;
+    const formData = new FormData(form);
+    const res = await fetch('/upload', {
+      method: 'POST',
+      body: formData
+    });
+    if (res.ok) {
+      form.reset();
+      loadFileList();
+    }
+  });
+
+  loadConfig();
+  </script>
+</body>
+</html>

@@ -6,7 +6,10 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "discord-py",
+    "fastapi>=0.116.1",
     "pynacl>=1.5.0",
+    "python-multipart>=0.0.20",
+    "uvicorn>=0.35.0",
 ]
 
 [tool.uv.sources]
