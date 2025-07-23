@@ -62,8 +62,10 @@ intents.message_content = True
 bot = commands.Bot(command_prefix='%', intents=intents)
 
 audio_file_cache = {}
+audio_file_cache: dict[str, discord.FFmpegPCMAudio] = {}
 
-def get_audio_file(file_path):
+def get_audio_file(file_path: str) -> discord.FFmpegPCMAudio:
+    global audio_file_cache
     if file_path not in audio_file_cache:
         print(f"Cache miss for {file_path}, loading audio file.")
         audio_file_cache[file_path] = discord.FFmpegPCMAudio(file_path)
@@ -71,6 +73,16 @@ def get_audio_file(file_path):
         print(f"Cache hit for {file_path}, using cached audio file.")
     # Return the cached audio file
     return audio_file_cache[file_path]
+
+async def refresh_cached_file(file_path: str) -> discord.FFmpegPCMAudio:
+    """Refresh the cached audio file."""
+    global audio_file_cache
+    if file_path in audio_file_cache:
+        print(f"Refreshing cache for {file_path}.")
+        audio_file_cache[file_path] = discord.FFmpegPCMAudio(file_path)
+    else:
+        print(f"File {file_path} not in cache, loading new audio file.")
+        audio_file_cache[file_path] = get_audio_file(file_path)
 
 @bot.event
 async def on_ready():
@@ -118,6 +130,7 @@ async def play_sound(ctx, channel_id: int, file_path: str):
 
     the_sound_file = get_audio_file(file_path)
     voice_client.play(the_sound_file)
+    bot.loop.create_task(refresh_cached_file(file_path)) # Refresh the cached file after playing
     while voice_client.is_playing():
         await asyncio.sleep(1)
     voice_client.stop()
@@ -193,12 +206,15 @@ async def play_if_channel_has_people(channel_id, sound=SOUND_FILE):
             vc = await channel.connect()
             print(f"[PLAY] Playing sound in {channel.name}")
             vc.play(get_audio_file(sound), after=lambda e: print(f'Done in {channel.name}: {e}'))
+            # Refresh the cached file after playing
+            bot.loop.create_task(refresh_cached_file(sound))
 
             while vc.is_playing():
                 await asyncio.sleep(1)
 
             print(f"[LEAVE] Done playing in {channel.name}, disconnecting")
             await vc.disconnect()
+            
 
         except discord.ClientException as e:
             print(f"[ERROR] ClientException in {channel.name}: {e}")
