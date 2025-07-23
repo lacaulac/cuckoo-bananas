@@ -61,6 +61,17 @@ intents.voice_states = True
 intents.message_content = True
 bot = commands.Bot(command_prefix='%', intents=intents)
 
+audio_file_cache = {}
+
+def get_audio_file(file_path):
+    if file_path not in audio_file_cache:
+        print(f"Cache miss for {file_path}, loading audio file.")
+        audio_file_cache[file_path] = discord.FFmpegPCMAudio(file_path)
+    else:
+        print(f"Cache hit for {file_path}, using cached audio file.")
+    # Return the cached audio file
+    return audio_file_cache[file_path]
+
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user.name}')
@@ -105,7 +116,7 @@ async def play_sound(ctx, channel_id: int, file_path: str):
         return
     voice_client = await channel.connect()
 
-    the_sound_file = discord.FFmpegPCMAudio(file_path)
+    the_sound_file = get_audio_file(file_path)
     voice_client.play(the_sound_file)
     while voice_client.is_playing():
         await asyncio.sleep(1)
@@ -181,7 +192,7 @@ async def play_if_channel_has_people(channel_id, sound=SOUND_FILE):
             print(f"[JOIN] Connecting to {channel.name}")
             vc = await channel.connect()
             print(f"[PLAY] Playing sound in {channel.name}")
-            vc.play(discord.FFmpegPCMAudio(sound), after=lambda e: print(f'Done in {channel.name}: {e}'))
+            vc.play(get_audio_file(sound), after=lambda e: print(f'Done in {channel.name}: {e}'))
 
             while vc.is_playing():
                 await asyncio.sleep(1)
