@@ -149,4 +149,8 @@ if __name__ == "__main__":
     if not config or "token" not in config:
         print("No valid configuration found. Please check your config.json file.")
         exit(1)
+    discord.opus.load_opus()
+    if not discord.opus.is_loaded():
+        print('Opus failed to load')
+        exit(1)
     bot.run(token=config["token"])
