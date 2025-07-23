@@ -38,6 +38,7 @@ if os.path.exists(SHARED_DIRECTORY):
 
 # Load configuration from config.json
 def load_config():
+    global config, channel_configs, SOUND_FILE
     try:
         with open(CONFIG_FILE_NAME, 'r') as f:
             config = json.load(f)
@@ -254,6 +255,7 @@ async def start_web_server():
     await server.serve()
     
 if __name__ == "__main__":
+    load_config()
     if not config or "token" not in config:
         print("No valid configuration found. Please check your config.json file.")
         exit(1)
