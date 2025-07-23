@@ -4,3 +4,9 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
+dependencies = [
+    "discord-py",
+]
+
+[tool.uv.sources]
+discord-py = { git = "https://github.com/Rapptz/discord.py" }
