@@ -83,12 +83,19 @@ async def refresh_cached_file(file_path: str) -> discord.FFmpegPCMAudio:
     else:
         print(f"File {file_path} not in cache, loading new audio file.")
         audio_file_cache[file_path] = get_audio_file(file_path)
+        
+async def set_status():
+    while not bot.is_closed():
+        await asyncio.sleep(60)  # Update status every minute
+        new_activity = discord.CustomActivity(name="Haunting your dreams", type=discord.ActivityType.custom, emoji=discord.PartialEmoji(name="🐦"))
+        await bot.change_presence(activity=new_activity)
 
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user.name}')
     bot.loop.create_task(hourly_sound_loop())
     bot.loop.create_task(start_web_server())
+    bot.loop.create_task(set_status())
     # print("Syncing commands...")
     # await bot.tree.sync(guild=discord.Object(id=577482669915373578))  # Sync commands to a specific guild
     # print("Commands synced successfully!")
