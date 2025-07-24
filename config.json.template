@@ -12,5 +12,18 @@
         {
             "id": 1370000000076019123456
         }
+    ],
+    "member_actions": [
+        {
+            "id": "457XXXXXXXXX26411",
+            "sound": "./shared/honk.wav",
+            "delay": 0,
+            "note": "XYZ's Honk"
+        }
+    ],
+    "activities": [
+        "Haunting your dreams",
+        "Tick tock, motherfluffers",
+        "Time waits for no one. Except me."
     ]
 }

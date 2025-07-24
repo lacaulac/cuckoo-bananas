@@ -63,6 +63,20 @@
     <p id="status" class="mt-4 text-green-400 hidden">✅ Saved successfully!</p>
   </div>
 
+  <div>
+      <h2 class="text-xl font-semibold mb-2">💬 Activities</h2>
+      <table class="w-full text-sm text-left text-gray-400">
+        <thead class="text-xs uppercase bg-gray-700 text-gray-300">
+          <tr>
+            <th class="px-4 py-2">Text</th>
+            <th class="px-4 py-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="activitiesTable" class="bg-gray-800"></tbody>
+      </table>
+      <button onclick="addActivityRow()" class="mt-2 px-3 py-1 bg-green-600 hover:bg-green-700 rounded">+ Add Activity</button>
+    </div>
+
   <script>
   function createInputCell(value, type = 'text') {
     const cell = document.createElement('td');
@@ -103,6 +117,13 @@
     document.getElementById('membersTable').appendChild(row);
   }
 
+  function addActivityRow(data = {}) {
+    const row = document.createElement('tr');
+    row.appendChild(createInputCell(data));
+    row.appendChild(createDeleteButton(row));
+    document.getElementById('activitiesTable').appendChild(row);
+  }
+
   async function loadConfig() {
     const res = await fetch('/config');
     const config = await res.json();
@@ -110,6 +131,7 @@
 
     (config.channels || []).forEach(addChannelRow);
     (config.member_actions || []).forEach(addMemberRow);
+    (config.activities || []).forEach(addActivityRow);
 
     await loadFileList();
   }
@@ -130,7 +152,12 @@
       return { id: id, sound, delay: parseFloat(delay), note };
     });
 
-    const data = { default_sound: defaultSound, channels, member_actions };
+    const activities = [...document.getElementById('activitiesTable').children].map(row => {
+      const text = [...row.querySelectorAll('input')].map(input => input.value)[0];
+      return text;
+    });
+
+    const data = { default_sound: defaultSound, channels, member_actions, activities };
 
     const res = await fetch('/config', {
       method: 'POST',

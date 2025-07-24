@@ -11,6 +11,7 @@ from pathlib import Path
 import shutil
 import json
 import uvicorn
+import random
 
 app = FastAPI()
 
@@ -83,11 +84,19 @@ async def refresh_cached_file(file_path: str) -> discord.FFmpegPCMAudio:
     else:
         print(f"File {file_path} not in cache, loading new audio file.")
         audio_file_cache[file_path] = get_audio_file(file_path)
+   
+def pick_activity():
+    """Pick a random activity from the config."""
+    if "activities" in config and config["activities"]:
+        random_choice = random.choice(config["activities"])
+        print(f"Picked random activity: {random_choice}")
+        return discord.CustomActivity(name=random_choice, type=discord.ActivityType.custom, emoji=discord.PartialEmoji(name="🐦"))
+    return discord.CustomActivity(name="Haunting your dreams", type=discord.ActivityType.custom, emoji=discord.PartialEmoji(name="🐦"))
         
 async def set_status():
     while not bot.is_closed():
         await asyncio.sleep(60)  # Update status every minute
-        new_activity = discord.CustomActivity(name="Haunting your dreams", type=discord.ActivityType.custom, emoji=discord.PartialEmoji(name="🐦"))
+        new_activity = pick_activity()
         await bot.change_presence(activity=new_activity)
 
 @bot.event
