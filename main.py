@@ -47,6 +47,9 @@ def load_config():
             # Convert to integer IDs if they are strings
             for channel in channel_configs:
                 if "id" in channel:
+                    if len(channel["id"]) == 0:
+                        print("Skipping empty channel id")
+                        continue
                     channel["id"] = int(channel["id"])
             # Same for member actions
             for member_action in config.get("member_actions", []):
